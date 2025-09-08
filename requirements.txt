@@ -1,0 +1,13 @@
+fastapi
+uvicorn[standard]
+SQLAlchemy>=1.4
+asyncpg
+alembic
+pydantic
+passlib[bcrypt]
+PyJWT
+aiosmtplib
+python-dotenv
+celery[redis]
+httpx
+email-validator
