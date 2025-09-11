@@ -1,10 +1,12 @@
-from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy import select, func
+from typing import Literal
+
+from fastapi import APIRouter, Depends, HTTPException, Query
+from sqlalchemy import select, func, or_, exists
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.orm import selectinload
+from sqlalchemy.orm import selectinload, aliased
 
-from src.database.models.movies import Movie, Genre, Star, Director
+from src.database.models.movies import Movie, Genre, Star, Director, movie_genres, movie_stars, movie_directors
 from src.database.session import get_db
 from src.schemas import movies as schemas
 from src.schemas.movies import MovieSchema, MovieListSchema
@@ -13,33 +15,74 @@ router = APIRouter(prefix="/movies", tags=["movies"])
 
 
 @router.get("/", response_model=MovieListSchema)
-async def list_movies(page: int = 0, limit: int = 10, db: AsyncSession = Depends(get_db)):
-    skip = (page - 1) * limit
-    count = await db.execute(select(func.count(Movie.id)))
-    total = count.scalar() or 0
-    if not total:
-        raise HTTPException(status_code=404, detail="No movies found.")
+async def list_movies(
+        page: int = Query(1, ge=1),
+        limit: int = Query(10, ge=1, le=100),
+        year: int | None = None,
+        min_rating: float = Query(None, ge=0, le=10),
+        max_rating: float = Query(None, ge=0, le=10),
+        order: str = Query("asc", regex="^(asc|desc)$"),
+        db: AsyncSession = Depends(get_db),
+        sort_by: Literal["name", "year", "imdb", "price", "votes"] = "name",
+        q: str | None = None,
 
-    result = await db.execute(
-        select(Movie)
-        .options(
-            selectinload(Movie.genres),
-            selectinload(Movie.stars),
-            selectinload(Movie.directors),
-            selectinload(Movie.certification),
-        ).offset(skip).limit(limit)
+):
+    skip = (page - 1) * limit
+    stmt = select(Movie).options(
+        selectinload(Movie.genres),
+        selectinload(Movie.stars),
+        selectinload(Movie.directors),
+        selectinload(Movie.certification),
     )
+
+    if year:
+        stmt = stmt.where(Movie.year == year)
+    if min_rating is not None:
+        stmt = stmt.where(Movie.imdb >= min_rating)
+    if max_rating is not None:
+        stmt = stmt.where(Movie.imdb <= max_rating)
+
+    if q:
+        stmt = stmt.where(
+            or_(
+                Movie.name.ilike(f"%{q}%"),
+                Movie.description.ilike(f"%{q}%"),
+                exists().where(movie_genres.c.movie_id == Movie.id)
+                .where(Genre.id == movie_genres.c.genre_id)
+                .where(Genre.name.ilike(f"%{q}%")),
+                exists().where(movie_stars.c.movie_id == Movie.id)
+                .where(Star.id == movie_stars.c.star_id)
+                .where(Star.name.ilike(f"%{q}%")),
+                exists().where(movie_directors.c.movie_id == Movie.id)
+                .where(Director.id == movie_directors.c.director_id)
+                .where(Director.name.ilike(f"%{q}%")),
+            )
+        )
+
+    sort_attr = getattr(Movie, sort_by)
+
+    if order == "desc":
+        stmt = stmt.order_by(func.lower(sort_attr).desc())
+    else:
+        stmt = stmt.order_by(func.lower(sort_attr).asc())
+
+    total_result = await db.execute(select(func.count(Movie.id)))
+    total = total_result.scalar() or 0
+    total_pages = (total + limit - 1) // limit
+
+    stmt = stmt.offset(skip).limit(limit)
+    result = await db.execute(stmt)
     movies = result.scalars().unique().all()
+
     if not movies:
         raise HTTPException(status_code=404, detail="No movies found.")
 
-    total_pages = (total + limit - 1) // limit
     movie_list = [MovieSchema.model_validate(movie) for movie in movies]
 
     response = MovieListSchema(
         movies=movie_list,
-        prev_page=f"/movies/?skip={skip - 1}&limit={limit}" if skip > 1 else None,
-        next_page=f"/movies/?skip={skip + 1}&limit={limit}" if skip < total_pages else None,
+        prev_page=f"/movies/?page={page - 1}&limit={limit}" if page > 1 else None,
+        next_page=f"/movies/?page={page + 1}&limit={limit}" if page < total_pages else None,
         total_pages=str(total_pages),
         total_items=str(total),
     )
