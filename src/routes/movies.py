@@ -6,8 +6,11 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload, aliased
 
-from src.database.models.movies import Movie, Genre, Star, Director, movie_genres, movie_stars, movie_directors
+from src.database.models.movies import Movie, Genre, Star, Director, movie_genres, movie_stars, movie_directors, \
+    ReactionType, MovieReaction
+from src.database.models.user import User
 from src.database.session import get_db
+from src.deps import get_current_user
 from src.schemas import movies as schemas
 from src.schemas.movies import MovieSchema, MovieListSchema
 
@@ -229,3 +232,46 @@ async def create_movie(
     except IntegrityError:
         await db.rollback()
         raise HTTPException(status_code=400, detail="Invalid input data.")
+
+
+@router.post("/movies/{movie_id}/react/{reaction}")
+async def react_to_movie(
+        movie_id: int,
+        reaction: ReactionType,
+        db: AsyncSession = Depends(get_db),
+        current_user: User = Depends(get_current_user)
+):
+    # Check if user already reacted
+    stmt = select(MovieReaction).where(
+        MovieReaction.movie_id == movie_id,
+        MovieReaction.user_id == current_user.id
+    )
+    result = await db.execute(stmt)
+    existing = result.scalar_one_or_none()
+
+    if existing:
+        existing.reaction = reaction  # Update like→dislike or vice versa
+    else:
+        new_reaction = MovieReaction(
+            movie_id=movie_id,
+            user_id=current_user.id,
+            reaction=reaction
+        )
+        db.add(new_reaction)
+
+    await db.commit()
+    return {"message": f"{reaction.value} added"}
+
+
+@router.get("/movies/{movie_id}/reactions")
+async def get_movie_reactions(movie_id: int, db: AsyncSession = Depends(get_db)):
+    stmt = select(MovieReaction.reaction, func.count(MovieReaction.id)).where(
+        MovieReaction.movie_id == movie_id
+    ).group_by(MovieReaction.reaction)
+
+    result = await db.execute(stmt)
+    counts = {r: c for r, c in result.all()}
+    return {
+        "likes": counts.get(ReactionType.like, 0),
+        "dislikes": counts.get(ReactionType.dislike, 0),
+    }

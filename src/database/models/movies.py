@@ -1,5 +1,7 @@
+import enum
 import uuid as uuid_pkg
-from sqlalchemy import Column, Integer, String, Float, Text, ForeignKey, DECIMAL, UniqueConstraint, Table
+
+from sqlalchemy import Column, Integer, String, Float, Text, ForeignKey, DECIMAL, UniqueConstraint, Table, Enum
 from sqlalchemy.orm import relationship, Mapped, mapped_column
 from src.database.models.base import Base
 
@@ -69,7 +71,30 @@ class Movie(Base):
     price: Mapped[float] = mapped_column(DECIMAL(10, 2))
     certification_id: Mapped[int] = mapped_column(ForeignKey("certifications.id"), nullable=False)
 
+    reactions = relationship("MovieReaction", back_populates="movie")
     certification = relationship("Certification", backref="movies")
     genres = relationship("Genre", secondary="movie_genres", backref="movies")
     directors = relationship("Director", secondary="movie_directors", backref="movies")
     stars = relationship("Star", secondary="movie_stars", backref="movies")
+
+
+
+class ReactionType(enum.Enum):
+    like = "like"
+    dislike = "dislike"
+
+class MovieReaction(Base):
+    __tablename__ = "movie_reactions"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    movie_id = Column(Integer, ForeignKey("movies.id", ondelete="CASCADE"), nullable=False)
+    reaction = Column(Enum(ReactionType), nullable=False)
+
+    __table_args__ = (UniqueConstraint("user_id", "movie_id", name="uix_user_movie"),)
+
+    # Relationships
+    user = relationship("User", back_populates="reactions")
+    movie = relationship("Movie", back_populates="reactions")
+
+
