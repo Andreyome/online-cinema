@@ -1,3 +1,4 @@
+from datetime import datetime
 from typing import List, Optional
 from pydantic import BaseModel
 
@@ -66,6 +67,31 @@ class MovieCreateSchema(MovieBase):
 
 class MovieListSchema(BaseModel):
     movies: List[MovieSchema]
+    prev_page: Optional[str] = None
+    next_page: Optional[str] = None
+    total_pages: Optional[str] = None
+    total_items: Optional[str] = None
+
+
+class CommentCreate(BaseModel):
+    content: str
+
+
+class CommentSchema(BaseModel):
+    id: int
+    content: str
+    created_at: datetime
+    updated_at: datetime | None
+    user_id: int
+    likes: int
+    dislikes: int
+
+    class Config:
+        from_attributes = True
+
+
+class CommentResponse(BaseModel):
+    items: List[CommentSchema]
     prev_page: Optional[str] = None
     next_page: Optional[str] = None
     total_pages: Optional[str] = None

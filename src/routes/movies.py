@@ -7,12 +7,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload, aliased
 
 from src.database.models.movies import Movie, Genre, Star, Director, movie_genres, movie_stars, movie_directors, \
-    ReactionType, MovieReaction
+    ReactionType, MovieReaction, Comment, CommentReaction
 from src.database.models.user import User
 from src.database.session import get_db
 from src.deps import get_current_user
 from src.schemas import movies as schemas
-from src.schemas.movies import MovieSchema, MovieListSchema
+from src.schemas.movies import MovieSchema, MovieListSchema, CommentCreate, CommentSchema, CommentResponse
 
 router = APIRouter(prefix="/movies", tags=["movies"])
 
@@ -119,25 +119,6 @@ async def create_movie(
         movie_data: schemas.MovieCreateSchema,
         db: AsyncSession = Depends(get_db)
 ):
-    """
-    Add a new movie to the database.
-
-    This endpoint allows the creation of a new movie with details such as
-    name, year, description, genres, stars, and directors. It automatically
-    handles linking or creating related entities.
-
-    :param movie_data: The data required to create a new movie.
-    :type movie_data: MovieCreate
-    :param db: The SQLAlchemy async database session (provided via dependency injection).
-    :type db: AsyncSession
-
-    :return: The created movie with all details.
-    :rtype: MovieSchema
-
-    :raises HTTPException:
-        - 409 if a movie with the same name and year already exists.
-        - 400 if input data is invalid (e.g., violating a constraint).
-    """
     # Conflict check
     existing_stmt = (select(Movie)
     .where(
@@ -241,7 +222,6 @@ async def react_to_movie(
         db: AsyncSession = Depends(get_db),
         current_user: User = Depends(get_current_user)
 ):
-    # Check if user already reacted
     stmt = select(MovieReaction).where(
         MovieReaction.movie_id == movie_id,
         MovieReaction.user_id == current_user.id
@@ -275,3 +255,119 @@ async def get_movie_reactions(movie_id: int, db: AsyncSession = Depends(get_db))
         "likes": counts.get(ReactionType.like, 0),
         "dislikes": counts.get(ReactionType.dislike, 0),
     }
+
+
+@router.post("/movies/{movie_id}/comments", response_model=CommentSchema)
+async def add_comment(
+        movie_id: int,
+        comment: CommentCreate,
+        db: AsyncSession = Depends(get_db),
+        current_user: User = Depends(get_current_user)
+):
+    new_comment = Comment(
+        user_id=current_user.id,
+        movie_id=movie_id,
+        content=comment.content
+    )
+    db.add(new_comment)
+    await db.commit()
+    await db.refresh(new_comment)
+    return CommentSchema(
+        **new_comment.__dict__,
+        likes=0,
+        dislikes=0
+    )
+
+
+@router.delete("/comments/{comment_id}")
+async def delete_comment(
+        comment_id: int,
+        db: AsyncSession = Depends(get_db),
+        current_user: User = Depends(get_current_user)
+):
+    result = await db.execute(select(Comment).where(Comment.id == comment_id))
+    comment = result.scalar_one_or_none()
+    if not comment:
+        raise HTTPException(status_code=404, detail="Comment not found")
+    if comment.user_id != current_user.id:
+        raise HTTPException(status_code=403, detail="Not allowed to delete this comment")
+
+    await db.delete(comment)
+    await db.commit()
+    return {"message": "Comment deleted"}
+
+
+@router.post("/comments/{comment_id}/react/{reaction}")
+async def react_to_comment(
+        comment_id: int,
+        reaction: ReactionType,
+        db: AsyncSession = Depends(get_db),
+        current_user: User = Depends(get_current_user)
+):
+    stmt = select(CommentReaction).where(
+        CommentReaction.comment_id == comment_id,
+        CommentReaction.user_id == current_user.id
+    )
+    result = await db.execute(stmt)
+    existing = result.scalar_one_or_none()
+
+    if existing:
+        existing.reaction = reaction
+    else:
+        new_reaction = CommentReaction(
+            comment_id=comment_id,
+            user_id=current_user.id,
+            reaction=reaction
+        )
+        db.add(new_reaction)
+
+    await db.commit()
+    return {"message": f"{reaction.value} added"}
+
+
+@router.get("/movies/{movie_id}/comments", response_model=CommentResponse)
+async def list_comments(
+        movie_id: int,
+        db: AsyncSession = Depends(get_db),
+        page: int = Query(1, ge=1),
+        size: int = Query(10, ge=1, le=100),
+):
+    total_stmt = select(func.count(Comment.id)).where(Comment.movie_id == movie_id)
+    total_result = await db.execute(total_stmt)
+    total = total_result.scalar_one()
+
+    stmt = (
+        select(Comment)
+        .where(Comment.movie_id == movie_id)
+        .offset((page - 1) * size)
+        .limit(size)
+    )
+    result = await db.execute(stmt)
+    comments = result.scalars().all()
+
+    items = []
+    for c in comments:
+        stmt = (
+            select(CommentReaction.reaction, func.count(CommentReaction.id))
+            .where(CommentReaction.comment_id == c.id)
+            .group_by(CommentReaction.reaction)
+        )
+        r = await db.execute(stmt)
+        counts = {reaction.value: count for reaction, count in r.all()}
+
+        items.append(
+            CommentSchema(
+                **c.__dict__,
+                likes=counts.get("like", 0),
+                dislikes=counts.get("dislike", 0),
+            )
+        )
+    total_pages = (total + size - 1) // size
+
+    return CommentResponse(
+        items=items,
+        total_items=str(total),
+        total_pages=str(total_pages),
+        prev_page=f"/movies/{movie_id}/comments/?page={page - 1}&limit={size}" if page > 1 else None,
+        next_page=f"/movies/{movie_id}/comments/?page={page + 1}&limit={size}" if page < total else None,
+    )
