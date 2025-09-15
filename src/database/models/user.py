@@ -1,19 +1,22 @@
 from sqlalchemy import (
     Column, Integer, String, Boolean, ForeignKey, DateTime, Text, Enum, UniqueConstraint
 )
-from sqlalchemy.orm import relationship
+from sqlalchemy.orm import relationship, Mapped
 from datetime import datetime
 import enum
 from src.database.models.base import Base
+
 
 class GenderEnum(enum.Enum):
     MAN = "MAN"
     WOMAN = "WOMAN"
 
+
 class UserGroupEnum(enum.Enum):
     USER = "USER"
     MODERATOR = "MODERATOR"
     ADMIN = "ADMIN"
+
 
 class UserGroup(Base):
     __tablename__ = "user_groups"
@@ -21,6 +24,7 @@ class UserGroup(Base):
     name = Column(String(50), unique=True, nullable=False)
 
     users = relationship("User", back_populates="group")
+
 
 class User(Base):
     __tablename__ = "users"
@@ -38,9 +42,15 @@ class User(Base):
     reactions = relationship("MovieReaction", back_populates="user")
 
     profile = relationship("UserProfile", uselist=False, back_populates="user")
-    activation_token = relationship("ActivationToken", uselist=False, back_populates="user", cascade="all, delete-orphan")
-    password_reset_token = relationship("PasswordResetToken", uselist=False, back_populates="user", cascade="all, delete-orphan")
+    activation_token = relationship("ActivationToken", uselist=False, back_populates="user",
+                                    cascade="all, delete-orphan")
+    password_reset_token = relationship("PasswordResetToken", uselist=False, back_populates="user",
+                                        cascade="all, delete-orphan")
     refresh_tokens = relationship("RefreshToken", back_populates="user", cascade="all, delete-orphan")
+
+    cart = relationship("Cart", back_populates="user", uselist=False)
+    purchases = relationship("Purchase", back_populates="user")
+
 
 class UserProfile(Base):
     __tablename__ = "user_profiles"
@@ -55,6 +65,7 @@ class UserProfile(Base):
 
     user = relationship("User", back_populates="profile")
 
+
 class ActivationToken(Base):
     __tablename__ = "activation_tokens"
     id = Column(Integer, primary_key=True)
@@ -64,6 +75,7 @@ class ActivationToken(Base):
 
     user = relationship("User", back_populates="activation_token")
 
+
 class PasswordResetToken(Base):
     __tablename__ = "password_reset_tokens"
     id = Column(Integer, primary_key=True)
@@ -72,6 +84,7 @@ class PasswordResetToken(Base):
     expires_at = Column(DateTime, nullable=False)
 
     user = relationship("User", back_populates="password_reset_token")
+
 
 class RefreshToken(Base):
     __tablename__ = "refresh_tokens"
