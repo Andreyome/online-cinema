@@ -34,5 +34,6 @@ class CartSchema(BaseModel):
     class Config:
         from_attributes = True
 
+
 class CartResponse(BaseModel):
     message: str
