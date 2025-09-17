@@ -80,6 +80,9 @@ class Movie(Base):
     directors = relationship("Director", secondary="movie_directors", backref="movies")
     stars = relationship("Star", secondary="movie_stars", backref="movies")
 
+    cart_items: Mapped[list["CartItem"]] = relationship(back_populates="movie", cascade="all, delete-orphan")
+    purchases: Mapped[list["Purchase"]] = relationship(back_populates="movie")
+
 
 class ReactionType(enum.Enum):
     like = "like"

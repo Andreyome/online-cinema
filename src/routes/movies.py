@@ -345,23 +345,38 @@ async def list_comments(
     result = await db.execute(stmt)
     comments = result.scalars().all()
 
-    items = []
-    for c in comments:
-        stmt = (
-            select(CommentReaction.reaction, func.count(CommentReaction.id))
-            .where(CommentReaction.comment_id == c.id)
-            .group_by(CommentReaction.reaction)
-        )
-        r = await db.execute(stmt)
-        counts = {reaction.value: count for reaction, count in r.all()}
 
-        items.append(
-            CommentSchema(
-                **c.__dict__,
-                likes=counts.get("like", 0),
-                dislikes=counts.get("dislike", 0),
-            )
+    if not comments:
+        return CommentResponse(items=[], total=total, page=page, size=size)
+
+    comment_ids = [c.id for c in comments]
+
+    reaction_stmt = (
+        select(
+            CommentReaction.comment_id,
+            CommentReaction.reaction,
+            func.count(CommentReaction.id).label("count"),
         )
+        .where(CommentReaction.comment_id.in_(comment_ids))
+        .group_by(CommentReaction.comment_id, CommentReaction.reaction)
+    )
+    reaction_result = await db.execute(reaction_stmt)
+
+    reaction_map: dict[int, dict[str, int]] = {}
+    for comment_id, reaction, count in reaction_result.all():
+        if comment_id not in reaction_map:
+            reaction_map[comment_id] = {"like": 0, "dislike": 0}
+        reaction_map[comment_id][reaction.value] = count
+
+    items = [
+        CommentSchema(
+            **c.__dict__,
+            likes=reaction_map.get(c.id, {}).get("like", 0),
+            dislikes=reaction_map.get(c.id, {}).get("dislike", 0),
+        )
+        for c in comments
+    ]
+
     total_pages = (total + size - 1) // size
 
     return CommentResponse(
