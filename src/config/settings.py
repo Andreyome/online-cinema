@@ -1,6 +1,3 @@
-from pydantic import  EmailStr
-from typing import Optional
-
 from pydantic_settings import BaseSettings
 
 
@@ -11,16 +8,10 @@ class Settings(BaseSettings):
     REFRESH_TOKEN_EXPIRE_DAYS: int = 7
     ACTIVATION_TOKEN_EXPIRE_HOURS: int = 24
     PASSWORD_RESET_TOKEN_EXPIRE_HOURS: int = 1
-
-    # SMTP_HOST: str
-    # SMTP_PORT: int = 587
-    # SMTP_USER: str
-    # SMTP_PASSWORD: str
-    # SMTP_FROM: EmailStr
-
-    # CELERY_BROKER_URL: str = "redis://localhost:6379/0"
+    ENVIRONMENT: str = "production"
 
     class Config:
         env_file = ".env"
+
 
 settings = Settings()

@@ -30,6 +30,21 @@ async def list_movies(
         q: str | None = None,
 
 ):
+    """
+    **List and filter movies.**
+
+    This endpoint returns a paginated list of movies. It supports filtering, searching, and sorting.
+
+    - **Filters:** `year`, `min_rating`, `max_rating`
+    - **Sorting:** `sort_by` and `order` parameters
+    - **Search:** `q` parameter for full-text search across movie details.
+
+    - **Raises:**
+      - `HTTPException` 404: If no movies match the search and filter criteria.
+
+    - **Returns:**
+      - `MovieListSchema`: A paginated list of movies.
+    """
     skip = (page - 1) * limit
     stmt = select(Movie).options(
         selectinload(Movie.genres),
@@ -93,7 +108,21 @@ async def list_movies(
 
 
 @router.get("/{movie_id}", response_model=schemas.MovieSchema)
-async def get_movie(movie_id: int, db: AsyncSession = Depends(get_db)) -> MovieSchema:
+async def get_movie(movie_id: int, db: AsyncSession = Depends(get_db)):
+    """
+    **Retrieve a single movie by its ID.**
+
+    This endpoint returns the detailed information for a single movie, including its genres, stars, and directors.
+
+    - **Parameters:**
+      - `movie_id`: The ID of the movie to retrieve.
+
+    - **Raises:**
+      - `HTTPException` 404: If a movie with the given ID does not exist.
+
+    - **Returns:**
+      - `MovieSchema`: The detailed movie information.
+    """
     result = await db.execute(
         select(Movie)
         .options(
@@ -119,6 +148,18 @@ async def create_movie(
         movie_data: schemas.MovieCreateSchema,
         db: AsyncSession = Depends(get_db)
 ):
+    """
+    **Create a new movie.**
+
+    This endpoint creates a new movie record in the database. It handles the creation of new genres, stars, and directors if they do not already exist.
+
+    - **Raises:**
+      - `HTTPException` 409: If a movie with the same name and year already exists.
+      - `HTTPException` 400: For invalid input data.
+
+    - **Returns:**
+      - `MovieSchema`: The created movie object, including its relationships.
+    """
     # Conflict check
     existing_stmt = (select(Movie)
     .where(
@@ -222,6 +263,18 @@ async def react_to_movie(
         db: AsyncSession = Depends(get_db),
         current_user: User = Depends(get_current_user)
 ):
+    """
+    **Add or update a user's reaction (like/dislike) to a movie.**
+
+    This endpoint allows an authenticated user to like or dislike a movie. If a user has already reacted, their previous reaction will be updated.
+
+    - **Parameters:**
+      - `movie_id`: The ID of the movie.
+      - `reaction`: The type of reaction ('like' or 'dislike').
+
+    - **Returns:**
+      - `dict`: A confirmation message.
+    """
     stmt = select(MovieReaction).where(
         MovieReaction.movie_id == movie_id,
         MovieReaction.user_id == current_user.id
@@ -245,6 +298,17 @@ async def react_to_movie(
 
 @router.get("/movies/{movie_id}/reactions")
 async def get_movie_reactions(movie_id: int, db: AsyncSession = Depends(get_db)):
+    """
+    **Get the total likes and dislikes for a movie.**
+
+    This endpoint returns the total count of 'like' and 'dislike' reactions for a specific movie.
+
+    - **Parameters:**
+      - `movie_id`: The ID of the movie.
+
+    - **Returns:**
+      - `dict`: An object containing the counts for likes and dislikes.
+    """
     stmt = select(MovieReaction.reaction, func.count(MovieReaction.id)).where(
         MovieReaction.movie_id == movie_id
     ).group_by(MovieReaction.reaction)
@@ -264,6 +328,18 @@ async def add_comment(
         db: AsyncSession = Depends(get_db),
         current_user: User = Depends(get_current_user)
 ):
+    """
+    **Add a new comment to a movie.**
+
+    Allows an authenticated user to post a new comment on a movie.
+
+    - **Parameters:**
+      - `movie_id`: The ID of the movie to comment on.
+      - `comment`: The comment content in the request body.
+
+    - **Returns:**
+      - `CommentSchema`: The newly created comment object.
+    """
     new_comment = Comment(
         user_id=current_user.id,
         movie_id=movie_id,
@@ -285,6 +361,21 @@ async def delete_comment(
         db: AsyncSession = Depends(get_db),
         current_user: User = Depends(get_current_user)
 ):
+    """
+    **Delete a comment.**
+
+    Allows a user to delete their own comment.
+
+    - **Parameters:**
+      - `comment_id`: The ID of the comment to delete.
+
+    - **Raises:**
+      - `HTTPException` 404: If the comment is not found.
+      - `HTTPException` 403: If the user is not the owner of the comment.
+
+    - **Returns:**
+      - `dict`: A confirmation message.
+    """
     result = await db.execute(select(Comment).where(Comment.id == comment_id))
     comment = result.scalar_one_or_none()
     if not comment:
@@ -304,6 +395,18 @@ async def react_to_comment(
         db: AsyncSession = Depends(get_db),
         current_user: User = Depends(get_current_user)
 ):
+    """
+    **Add or update a user's reaction (like/dislike) to a comment.**
+
+    Allows an authenticated user to like or dislike a specific comment. If a reaction already exists, it is updated.
+
+    - **Parameters:**
+      - `comment_id`: The ID of the comment.
+      - `reaction`: The type of reaction ('like' or 'dislike').
+
+    - **Returns:**
+      - `dict`: A confirmation message.
+    """
     stmt = select(CommentReaction).where(
         CommentReaction.comment_id == comment_id,
         CommentReaction.user_id == current_user.id
@@ -332,6 +435,19 @@ async def list_comments(
         page: int = Query(1, ge=1),
         size: int = Query(10, ge=1, le=100),
 ):
+    """
+    **List all comments for a movie.**
+
+    This endpoint returns a paginated list of comments for a specific movie, including the number of likes and dislikes for each comment.
+
+    - **Parameters:**
+      - `movie_id`: The ID of the movie.
+      - `page`: The page number to retrieve.
+      - `size`: The number of comments per page.
+
+    - **Returns:**
+      - `CommentResponse`: A paginated list of comments with reaction counts.
+    """
     total_stmt = select(func.count(Comment.id)).where(Comment.movie_id == movie_id)
     total_result = await db.execute(total_stmt)
     total = total_result.scalar_one()
@@ -344,7 +460,6 @@ async def list_comments(
     )
     result = await db.execute(stmt)
     comments = result.scalars().all()
-
 
     if not comments:
         return CommentResponse(items=[], total=total, page=page, size=size)

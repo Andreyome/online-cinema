@@ -21,6 +21,18 @@ async def create_order(
         db: AsyncSession = Depends(get_db),
         user=Depends(get_current_user)
 ):
+    """
+    **Create a new order from the user's cart.**
+
+    This endpoint initiates a new order by converting all items in the authenticated user's cart into a pending order. It also performs checks to ensure the movies are not already purchased or part of another pending order.
+
+    - **Raises:**
+      - `HTTPException` 404: If the cart is empty or not found.
+      - `HTTPException` 409: If a movie in the cart is already purchased or is in an existing pending order.
+
+    - **Returns:**
+      - `OrderSchema`: The newly created order object.
+    """
     cart_stmt = (
         select(Cart)
         .where(Cart.user_id == user.id)
@@ -89,6 +101,21 @@ async def cancel_order(
         db: AsyncSession = Depends(get_db),
         user=Depends(get_current_user)
 ):
+    """
+    **Cancel a pending order.**
+
+    This endpoint allows a user to cancel one of their own orders if it is in a 'Pending' status.
+
+    - **Parameters:**
+      - `order_id`: The ID of the order to cancel.
+
+    - **Raises:**
+      - `HTTPException` 404: If the order is not found.
+      - `HTTPException` 409: If the order is not in a 'Pending' status.
+
+    - **Returns:**
+      - `OrderSchema`: The updated order object with a 'Canceled' status.
+    """
     stmt = select(Order).where(Order.id == order_id, Order.user_id == user.id)
     result = await db.execute(stmt)
     order = result.scalars().first()
@@ -109,6 +136,17 @@ async def cancel_order(
 @router.get("/orders/", response_model=List[OrderSchema])
 async def get_orders(db: AsyncSession = Depends(get_db),
                      user=Depends(get_current_user)):
+    """
+    **Retrieve a list of all user's orders.**
+
+    This endpoint returns all orders associated with the authenticated user, including the items within each order.
+
+    - **Raises:**
+      - `HTTPException` 404: If the user has no orders.
+
+    - **Returns:**
+      - `list[OrderSchema]`: A list of the user's orders.
+    """
     stmt = select(Order).options(selectinload(Order.items)).where(Order.user_id == user.id)
     result = await db.execute(stmt)
     orders = result.scalars().all()
@@ -132,7 +170,16 @@ async def get_all_orders(
         admin_user=Depends(get_current_admin)
 ):
     """
-    Admin-only route to retrieve all orders with filtering, pagination, and sorting.
+    **Admin-only: Retrieve all orders with filtering, pagination, and sorting.**
+
+    This endpoint is for administrators only. It allows for advanced queries to retrieve orders based on various criteria, including user ID, date range, status, and sorting options.
+
+    - **Raises:**
+      - `HTTPException` 400: If invalid query parameters are provided for status, sort_by, or sort_order.
+      - `HTTPException` 404: If no orders are found matching the criteria.
+
+    - **Returns:**
+      - `list[OrderSchema]`: A list of orders matching the specified criteria.
     """
     stmt = select(Order).options(selectinload(Order.items))
 

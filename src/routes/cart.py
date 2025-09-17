@@ -1,18 +1,11 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
-
 from src.database.models.cart import Cart, CartItem, Purchase
 from src.database.models.movies import Movie
 from src.database.session import get_db
 from src.deps import get_current_user
 from src.schemas.cart import CartSchema, CartResponse
-
-router = APIRouter(prefix="/cart", tags=["cart"])
-
-from fastapi import APIRouter, Depends
-from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select
 from sqlalchemy.orm import selectinload
 
 router = APIRouter(prefix="/cart", tags=["cart"])
@@ -24,7 +17,12 @@ async def get_cart(
         user=Depends(get_current_user)
 ):
     """
-    Retrieves the user's cart and its items. A cart is created if it does not exist.
+    **Retrieve the user's cart.**
+
+    Fetches the authenticated user's shopping cart, creating a new one if it doesn't already exist. The response includes all movies and their details in the cart.
+
+    - **Returns:**
+      - `CartSchema`: An object containing the cart ID and a list of all items.
     """
     stmt = (
         select(Cart)
@@ -50,6 +48,21 @@ async def add_movie_to_cart(
         db: AsyncSession = Depends(get_db),
         user=Depends(get_current_user)
 ):
+    """
+    **Add a movie to the cart.**
+
+    Adds a specified movie to the authenticated user's shopping cart.
+
+    - **Parameters:**
+      - `movie_id`: The ID of the movie to add.
+
+    - **Raises:**
+      - `HTTPException` 404: If the movie does not exist.
+      - `HTTPException` 400: If the movie has already been purchased by the user.
+
+    - **Returns:**
+      - `CartResponse`: A confirmation message.
+    """
     # Check if the movie exists first
     movie_stmt = select(Movie).where(Movie.id == movie_id)
     movie = await db.scalar(movie_stmt)
@@ -93,14 +106,26 @@ async def add_movie_to_cart(
     return {"message": "Movie successfully added to cart."}
 
 
-# In the same file as the other cart routes
-
 @router.delete("/remove/{movie_id}", response_model=CartResponse)
 async def remove_movie_from_cart(
         movie_id: int,
         db: AsyncSession = Depends(get_db),
         user=Depends(get_current_user)
 ):
+    """
+    **Remove a movie from the cart.**
+
+    Removes a specified movie from the authenticated user's shopping cart.
+
+    - **Parameters:**
+      - `movie_id`: The ID of the movie to remove.
+
+    - **Raises:**
+      - `HTTPException` 404: If the cart or movie is not found.
+
+    - **Returns:**
+      - `CartResponse`: A confirmation message.
+    """
     # Get the user's cart
     cart_stmt = select(Cart).where(Cart.user_id == user.id)
     cart = await db.scalar(cart_stmt)
@@ -136,6 +161,17 @@ async def pay_for_cart(
         db: AsyncSession = Depends(get_db),
         user=Depends(get_current_user)
 ):
+    """
+    **Pay for all movies in the cart.**
+
+    This endpoint simulates the payment process, moves all items from the cart to the user's purchased movies, and clears the cart.
+
+    - **Raises:**
+      - `HTTPException` 400: If the cart is empty.
+
+    - **Returns:**
+      - `CartResponse`: A success message.
+    """
     # Get the user's cart and its items
     cart_stmt = (
         select(Cart)
@@ -165,13 +201,22 @@ async def pay_for_cart(
     return {"message": "Payment successful! All movies have been purchased."}
 
 
-# In the same file as the other cart routes
-
 @router.delete("/clear", response_model=CartResponse)
 async def clear_cart(
         db: AsyncSession = Depends(get_db),
         user=Depends(get_current_user)
 ):
+    """
+    **Clear the entire cart.**
+
+    Deletes all movies from the authenticated user's shopping cart.
+
+    - **Raises:**
+      - `HTTPException` 404: If the cart is not found.
+
+    - **Returns:**
+      - `CartResponse`: A confirmation message.
+    """
     # Find the user's cart and items
     cart_stmt = (
         select(Cart)
@@ -192,5 +237,3 @@ async def clear_cart(
         await db.commit()
 
     return {"message": "Cart successfully cleared."}
-
-
