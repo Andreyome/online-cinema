@@ -33,6 +33,10 @@ class User(Base):
     group_id = Column(Integer, ForeignKey("user_groups.id"), nullable=False)
 
     group = relationship("UserGroup", back_populates="users")
+
+    comments = relationship("Comment", back_populates="user", cascade="all, delete-orphan")
+    reactions = relationship("MovieReaction", back_populates="user")
+
     profile = relationship("UserProfile", uselist=False, back_populates="user")
     activation_token = relationship("ActivationToken", uselist=False, back_populates="user", cascade="all, delete-orphan")
     password_reset_token = relationship("PasswordResetToken", uselist=False, back_populates="user", cascade="all, delete-orphan")
