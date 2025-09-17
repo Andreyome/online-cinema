@@ -32,8 +32,8 @@ class User(Base):
     email = Column(String(320), unique=True, nullable=False, index=True)
     hashed_password = Column(String(255), nullable=False)
     is_active = Column(Boolean, default=False, nullable=False)
-    created_at = Column(DateTime, default=datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = Column(DateTime, default=datetime.now)
+    updated_at = Column(DateTime, default=datetime.now, onupdate=datetime.utcnow)
     group_id = Column(Integer, ForeignKey("user_groups.id"), nullable=False)
 
     group = relationship("UserGroup", back_populates="users")
@@ -49,6 +49,7 @@ class User(Base):
     refresh_tokens = relationship("RefreshToken", back_populates="user", cascade="all, delete-orphan")
 
     cart = relationship("Cart", back_populates="user", uselist=False)
+    orders = relationship("Order", back_populates="user")
     purchases = relationship("Purchase", back_populates="user")
 
 

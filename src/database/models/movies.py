@@ -5,6 +5,7 @@ from sqlalchemy import Column, Integer, String, Float, Text, ForeignKey, DECIMAL
     DateTime, func
 from sqlalchemy.orm import relationship, Mapped, mapped_column
 from src.database.models.base import Base
+from src.database.models.orders import OrderItem
 
 movie_genres = Table(
     "movie_genres", Base.metadata,
@@ -83,6 +84,7 @@ class Movie(Base):
     cart_items: Mapped[list["CartItem"]] = relationship(back_populates="movie", cascade="all, delete-orphan")
     purchases: Mapped[list["Purchase"]] = relationship(back_populates="movie")
 
+    order_items: Mapped[list["OrderItem"]] = relationship(back_populates="movie")
 
 class ReactionType(enum.Enum):
     like = "like"
