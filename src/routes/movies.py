@@ -24,7 +24,7 @@ async def list_movies(
         year: int | None = None,
         min_rating: float = Query(None, ge=0, le=10),
         max_rating: float = Query(None, ge=0, le=10),
-        order: str = Query("asc", regex="^(asc|desc)$"),
+        order: str = Query("asc", pattern="^(asc|desc)$"),
         db: AsyncSession = Depends(get_db),
         sort_by: Literal["name", "year", "imdb", "price", "votes"] = "name",
         q: str | None = None,

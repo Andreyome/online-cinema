@@ -17,7 +17,7 @@ from src.config.settings import settings
 router = APIRouter(prefix="/api/v1/auth", tags=["auth"])
 
 
-@router.post("/register", response_model=schemas.UserOut)
+@router.post("/register", response_model=schemas.UserOut, status_code=status.HTTP_201_CREATED,)
 async def register(payload: schemas.RegisterRequest, db: AsyncSession = Depends(get_db)):
     """
     **Register a new user account.**

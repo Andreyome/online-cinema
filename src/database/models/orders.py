@@ -1,7 +1,7 @@
 from datetime import datetime
 import enum
 
-from sqlalchemy import  ForeignKey, DECIMAL, Enum
+from sqlalchemy import ForeignKey, DECIMAL, Enum, DateTime, func, text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from src.database.models.base import Base
@@ -16,7 +16,12 @@ class Order(Base):
     __tablename__ = "orders"
     id: Mapped[int] = mapped_column(primary_key=True)
     user_id: Mapped[int] = mapped_column(ForeignKey("users.id"))
-    created_at: Mapped[datetime] = mapped_column()
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        default=func.now(),
+        server_default=text("(datetime('now'))")
+    )
     status: Mapped[OrderStatusesEnum] = mapped_column(Enum(OrderStatusesEnum), nullable=False)
     total_amount: Mapped[float] = mapped_column(DECIMAL(10, 2), nullable=False)
 
